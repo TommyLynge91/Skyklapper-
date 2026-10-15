@@ -33,7 +33,16 @@ sources:
     shop: https://justfishing.dk
     category: webshops
   - name: Effektlageret
-    shop: https://effektlageret.dk
+    smartweb: https://www.effektlageret.dk   # Smartweb-butik uden RSS
+    category: webshops
+  - name: Friluft.dk
+    shop: https://friluft.dk
+    category: webshops
+  - name: Spejder Sport
+    shop: https://spejdersport.dk
+    category: webshops
+  - name: Eventyrsport
+    shop: https://eventyrsport.dk
     category: webshops
 
   # Subreddits. sort kan være hot, new eller top.

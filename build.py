@@ -7,7 +7,9 @@ import sys
 import time
 from html.parser import HTMLParser
 from pathlib import Path
+from datetime import datetime
 from urllib.parse import urljoin
+from zoneinfo import ZoneInfo
 
 import feedparser
 import requests
@@ -175,7 +177,54 @@ def process_entries(entries, src, cfg, blocker, cutoff):
     return items, blocked
 
 
+def fetch_smartweb(src, cfg, blocker, cutoff):
+    """Webshops på Smartweb/ScanNet (fx Effektlageret) uden RSS: læser butikkens egen
+    vareliste-adresse, sorteret efter nyeste."""
+    base = src["smartweb"].rstrip("/")
+    limit = cfg.get("max_per_source", 25)
+    url = (f"{base}/json/products?currencyIso=DKK&field=new&filter=%7B%7D"
+           f"&filterGenerate=false&id=&limit={limit}&orderBy=Age&page=1")
+    print(f"     {src['name']} bruger {url}")
+    products = get(url).json().get("products", [])
+    if not products:
+        raise ValueError("butikken returnerede ingen varer; adressen eller formatet er måske ændret")
+
+    tz = ZoneInfo("Europe/Copenhagen")
+    items, blocked = [], 0
+    for p in products:
+        try:
+            ts = datetime.strptime(p["DateCreated"], "%Y-%m-%d %H:%M:%S").replace(tzinfo=tz).timestamp()
+        except (KeyError, TypeError, ValueError):
+            ts = time.time()
+        if ts < cutoff:
+            continue
+        title = strip_tags(" ".join(filter(None, [p.get("ProducerTitle"), p.get("Title")]))
+                           if p.get("ProducerTitle") and p.get("ProducerTitle") not in (p.get("Title") or "")
+                           else p.get("Title", ""))
+        parts = [p.get("CategoryTitle")]
+        price = (p.get("Prices") or [{}])[0].get("PriceMinWithVat")
+        if price:
+            parts.append(f"{price:,.0f} kr.".replace(",", "."))
+        summary = ". ".join(x for x in parts if x)
+        if blocker and blocker.search(f"{title} {summary}"):
+            blocked += 1
+            continue
+        images = p.get("Images") or []
+        items.append({
+            "title": title,
+            "summary": summary,
+            "link": base + p["Handle"] if p.get("Handle") else base,
+            "image": (base + images[0]) if images and images[0].startswith("/") else (images[0] if images else None),
+            "source": src["name"],
+            "category": src.get("category", ""),
+            "ts": int(ts),
+        })
+    return items, blocked
+
+
 def fetch_source(src, cfg, blocker, cutoff):
+    if src.get("smartweb"):
+        return fetch_smartweb(src, cfg, blocker, cutoff)
     url = resolve_feed_url(src)
     if src.get("site") or src.get("shop"):
         print(f"     {src['name']} bruger {url}")
