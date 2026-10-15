@@ -25,6 +25,42 @@ YT_CACHE_FILE = ROOT / ".cache" / "youtube_ids.json"
 YT_CACHE = json.loads(YT_CACHE_FILE.read_text()) if YT_CACHE_FILE.exists() else {}
 
 
+REDDIT_BASE = "https://www.reddit.com"
+COMMON_FEED_PATHS = ["/feed", "/feed/", "/rss", "/rss.xml", "/feed.xml", "/atom.xml", "/index.xml"]
+
+
+def get(url):
+    """GET med op til to nye forsøg, hvis serveren svarer 429 (for mange forespørgsler)."""
+    for attempt in range(3):
+        r = SESSION.get(url, timeout=TIMEOUT)
+        if r.status_code != 429 or attempt == 2:
+            r.raise_for_status()
+            return r
+        wait = r.headers.get("Retry-After", "")
+        time.sleep(min(int(wait), 30) if wait.isdigit() else 10 * (attempt + 1))
+
+
+# Typiske adresser for "nye varer" på de mest udbredte webshop-platforme.
+SHOP_FEED_PATHS = [
+    "/collections/all.atom?sort_by=created-descending",  # Shopify
+    "/?post_type=product&feed=rss2",                      # WooCommerce
+    "/feed/?post_type=product",                           # WooCommerce, anden form
+]
+
+
+def first_feed(base, paths):
+    """Returnerer den første adresse, der svarer med et feed med opslag, ellers None."""
+    for path in paths:
+        url = urljoin(base, path)
+        try:
+            r = SESSION.get(url, timeout=TIMEOUT)
+            if r.ok and feedparser.parse(r.content).entries:
+                return url
+        except requests.RequestException:
+            pass
+    return None
+
+
 class FeedLinkFinder(HTMLParser):
     """Finder <link rel="alternate" type="application/rss+xml"> på en forside."""
 
@@ -47,7 +83,7 @@ def resolve_feed_url(src):
     if src.get("feed"):
         return src["feed"]
     if src.get("subreddit"):
-        return f"https://www.reddit.com/r/{src['subreddit']}/{src.get('sort', 'hot')}/.rss"
+        return f"{REDDIT_BASE}/r/{src['subreddit']}/{src.get('sort', 'hot')}/.rss"
     if src.get("youtube_channel_id"):
         return f"https://www.youtube.com/feeds/videos.xml?channel_id={src['youtube_channel_id']}"
     if src.get("youtube_handle"):
@@ -64,14 +100,22 @@ def resolve_feed_url(src):
             raise ValueError("kunne ikke finde kanalens ID; angiv youtube_channel_id i stedet")
         YT_CACHE[handle.lower()] = m.group(1)
         return f"https://www.youtube.com/feeds/videos.xml?channel_id={m.group(1)}"
+    if src.get("shop"):
+        found = first_feed(src["shop"], SHOP_FEED_PATHS)
+        if found:
+            return found
+        src = {**src, "site": src["shop"]}  # prøv som almindelig side (fx butikkens blog)
     if src.get("site"):
         r = SESSION.get(src["site"], timeout=TIMEOUT)
         r.raise_for_status()
         finder = FeedLinkFinder()
         finder.feed(r.text)
-        if not finder.links:
-            raise ValueError("fandt intet RSS-feed på forsiden; angiv feed: i stedet")
-        return urljoin(src["site"], finder.links[0])
+        if finder.links:
+            return urljoin(src["site"], finder.links[0])
+        found = first_feed(src["site"], COMMON_FEED_PATHS)
+        if found:
+            return found
+        raise ValueError("fandt intet RSS-feed på siden eller de almindelige adresser; angiv feed: i stedet")
     raise ValueError("kilden mangler feed, site, subreddit eller youtube_handle")
 
 
@@ -105,15 +149,10 @@ def block_pattern(words):
     return re.compile(r"\b(?:" + "|".join(parts) + r")\b", re.IGNORECASE) if parts else None
 
 
-def fetch_source(src, cfg, blocker, cutoff):
-    url = resolve_feed_url(src)
-    r = SESSION.get(url, timeout=TIMEOUT)
-    r.raise_for_status()
-    feed = feedparser.parse(r.content)
+def process_entries(entries, src, cfg, blocker, cutoff):
     is_reddit = bool(src.get("subreddit"))
-
     items, blocked = [], 0
-    for e in feed.entries[: cfg.get("max_per_source", 25)]:
+    for e in entries[: cfg.get("max_per_source", 25)]:
         ts_struct = e.get("published_parsed") or e.get("updated_parsed")
         ts = time.mktime(ts_struct) if ts_struct else time.time()
         if ts < cutoff:
@@ -136,23 +175,62 @@ def fetch_source(src, cfg, blocker, cutoff):
     return items, blocked
 
 
+def fetch_source(src, cfg, blocker, cutoff):
+    url = resolve_feed_url(src)
+    if src.get("site") or src.get("shop"):
+        print(f"     {src['name']} bruger {url}")
+    r = get(url)
+    return process_entries(feedparser.parse(r.content).entries, src, cfg, blocker, cutoff)
+
+
+def fetch_reddit_combined(srcs):
+    """Henter alle subreddits i én forespørgsel (r/a+b+c), så Reddit ikke begrænser os,
+    og fordeler opslagene på kilderne ud fra adressen."""
+    names = "+".join(s["subreddit"] for s in srcs)
+    r = get(f"{REDDIT_BASE}/r/{names}/hot/.rss?limit=100")
+    groups = {s["subreddit"].lower(): [] for s in srcs}
+    for e in feedparser.parse(r.content).entries:
+        m = re.search(r"/r/([^/]+)/", e.get("link", ""))
+        if m and m.group(1).lower() in groups:
+            groups[m.group(1).lower()].append(e)
+    return groups
+
+
 def main():
     cfg = yaml.safe_load((ROOT / "config.yaml").read_text(encoding="utf-8"))
     blocker = block_pattern(cfg.get("block_words"))
     cutoff = time.time() - cfg.get("max_age_days", 3) * 86400
 
     all_items, problems, total_blocked = [], [], 0
-    for src in cfg.get("sources", []):
+
+    def record(src, items, blocked):
+        nonlocal all_items, total_blocked
+        all_items += items
+        total_blocked += blocked
+        print(f"OK   {src['name']}: {len(items)} opslag, {blocked} skjult")
+
+    sources = cfg.get("sources", [])
+    reddit = [s for s in sources if s.get("subreddit")]
+    for src in sources:
+        if src.get("subreddit"):
+            continue
         try:
-            items, blocked = fetch_source(src, cfg, blocker, cutoff)
-            all_items += items
-            total_blocked += blocked
-            print(f"OK   {src['name']}: {len(items)} opslag, {blocked} skjult")
+            record(src, *fetch_source(src, cfg, blocker, cutoff))
         except Exception as exc:  # én kilde må ikke vælte hele siden
             problems.append(src["name"])
             print(f"FEJL {src['name']}: {exc}", file=sys.stderr)
-        if src.get("subreddit"):
-            time.sleep(2)  # skån Reddit, så vi ikke bliver begrænset
+
+    if reddit:
+        try:
+            groups = fetch_reddit_combined(reddit)
+            for src in reddit:
+                entries = groups[src["subreddit"].lower()]
+                if not entries:
+                    print(f"NB   {src['name']}: ingen opslag i det samlede Reddit-feed")
+                record(src, *process_entries(entries, src, cfg, blocker, cutoff))
+        except Exception as exc:
+            problems += [s["name"] for s in reddit]
+            print(f"FEJL Reddit (alle subreddits): {exc}", file=sys.stderr)
 
     if not all_items and problems:
         sys.exit("Ingen kilder virkede. Se fejlene ovenfor.")

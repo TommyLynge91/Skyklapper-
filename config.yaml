@@ -13,6 +13,7 @@ categories:
   traening: { label: Træning,    color: "#0F8B8D" }
   friluft: { label: Friluftsliv, color: "#4E8A3E" }
   underholdning: { label: Underholdning, color: "#C2408F" }
+  webshops: { label: Nyt i butikkerne, color: "#8A5A2B" }
 
 sources:
   # Nyhedssider: angiv forsiden, så finder scriptet selv RSS-feedet.
@@ -23,6 +24,17 @@ sources:
   - name: Gaffa
     site: https://gaffa.dk
     category: musik
+
+  # Webshops: viser nye varer, hvis butikken har et feed til det.
+  - name: Park og Fritid
+    shop: https://parkogfritid.dk
+    category: webshops
+  - name: Just Fishing
+    shop: https://justfishing.dk
+    category: webshops
+  - name: Effektlageret
+    shop: https://effektlageret.dk
+    category: webshops
 
   # Subreddits. sort kan være hot, new eller top.
   - name: r/soccer
