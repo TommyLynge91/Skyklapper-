@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>__TITLE__</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #EDEFE9; --card: #F8FAF6; --ink: #1B2420; --muted: #5E6B63; --line: #D5DAD2;
+    --focus: #2F6FD6;
+    color-scheme: light;
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --paper: #141A17; --card: #1C2420; --ink: #E6ECE7; --muted: #93A099; --line: #2B3530; --focus: #7FB0FF; color-scheme: dark; }
+  }
+  *, *::before, *::after { box-sizing: inherit; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font-family: "Bricolage Grotesque", system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 17px; line-height: 1.45;
+  }
+  body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--paper); }
+  .wrap { max-width: 680px; margin: 0 auto; padding: 0 16px 48px; }
+
+  header { padding: 40px 0 20px; }
+  h1 { font-size: clamp(44px, 12vw, 76px); font-weight: 800; line-height: .95; letter-spacing: -0.035em; margin: 0; }
+  .status { color: var(--muted); margin: 12px 0 0; font-size: 15px; }
+
+  nav {
+    position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5;
+    background: var(--paper); padding: 10px 0; margin-bottom: 8px;
+    display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none;
+  }
+  nav::-webkit-scrollbar { display: none; }
+  .chip {
+    flex: none; font: inherit; font-size: 15px; font-weight: 600; cursor: pointer;
+    padding: 6px 14px; border-radius: 999px; border: 1.5px solid var(--line);
+    background: transparent; color: var(--ink); display: inline-flex; align-items: center; gap: 7px;
+  }
+  .chip i { width: 9px; height: 9px; border-radius: 50%; background: var(--c); }
+  .chip[aria-pressed="true"] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+  .chip:focus-visible, a.post:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+  ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+  a.post {
+    display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: start;
+    background: var(--card); color: inherit; text-decoration: none;
+    border-radius: 6px; padding: 14px 14px 14px 16px;
+    border-left: 4px solid var(--c, var(--line));
+  }
+  a.post:visited h2 { color: var(--muted); }
+  .meta { font-size: 13.5px; color: var(--muted); display: flex; gap: 10px; flex-wrap: wrap; }
+  .meta b { color: var(--ink); font-weight: 600; }
+  h2 { font-size: 18.5px; font-weight: 600; line-height: 1.28; margin: 4px 0 0; letter-spacing: -0.01em; }
+  p.sum { margin: 6px 0 0; color: var(--muted); font-size: 15px;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .thumb { width: 84px; height: 84px; border-radius: 4px; object-fit: cover; background: var(--line); }
+  .empty { color: var(--muted); padding: 24px 0; }
+  @media (max-width: 420px) { .thumb { width: 68px; height: 68px; } h2 { font-size: 17px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1 id="hello">Hej</h1>
+    <p class="status" id="status"></p>
+  </header>
+  <nav id="chips" aria-label="Filtrér efter kategori"></nav>
+  <ol id="feed"></ol>
+  <p class="empty" id="empty" hidden>Intet nyt i denne kategori lige nu.</p>
+</div>
+
+<script id="data" type="application/json">__DATA__</script>
+<script>
+(function () {
+  const data = JSON.parse(document.getElementById("data").textContent);
+  const cats = data.categories || {};
+  const h = new Date().getHours();
+  document.getElementById("hello").textContent =
+    h < 5 ? "God nat" : h < 10 ? "God morgen" : h < 18 ? "God dag" : "God aften";
+
+  const built = new Date(data.built * 1000);
+  const hm = built.toLocaleTimeString("da-DK", { hour: "2-digit", minute: "2-digit" });
+  let status = `${data.items.length} opslag. Opdateret kl. ${hm}.`;
+  if (data.blocked) status += ` ${data.blocked} skjult af dit filter.`;
+  if (data.problems.length) status += ` Kunne ikke hente: ${data.problems.join(", ")}.`;
+  document.getElementById("status").textContent = status;
+
+  function ago(ts) {
+    const m = Math.max(1, Math.round((Date.now() / 1000 - ts) / 60));
+    if (m < 60) return `${m} min`;
+    const t = Math.round(m / 60);
+    if (t < 24) return `${t} t`;
+    const d = Math.round(t / 24);
+    return d === 1 ? "1 dag" : `${d} dage`;
+  }
+
+  const feed = document.getElementById("feed");
+  const frag = document.createDocumentFragment();
+  for (const it of data.items) {
+    const li = document.createElement("li");
+    li.dataset.cat = it.category;
+    const a = document.createElement("a");
+    a.className = "post";
+    a.href = it.link;
+    a.target = "_blank";
+    a.rel = "noopener";
+    if (cats[it.category]) a.style.setProperty("--c", cats[it.category].color);
+
+    const text = document.createElement("div");
+    const meta = document.createElement("div");
+    meta.className = "meta";
+    const src = document.createElement("b");
+    src.textContent = it.source;
+    const when = document.createElement("span");
+    when.textContent = ago(it.ts);
+    meta.append(src, when);
+    const h2 = document.createElement("h2");
+    h2.textContent = it.title;
+    text.append(meta, h2);
+    if (it.summary) {
+      const p = document.createElement("p");
+      p.className = "sum";
+      p.textContent = it.summary;
+      text.append(p);
+    }
+    a.append(text);
+
+    if (it.image) {
+      const img = document.createElement("img");
+      img.className = "thumb";
+      img.src = it.image;
+      img.alt = "";
+      img.loading = "lazy";
+      img.referrerPolicy = "no-referrer";
+      img.onerror = () => img.remove();
+      a.append(img);
+    }
+    li.append(a);
+    frag.append(li);
+  }
+  feed.append(frag);
+
+  const nav = document.getElementById("chips");
+  const used = new Set(data.items.map(i => i.category));
+  const entries = [["", { label: "Alle" }], ...Object.entries(cats).filter(([k]) => used.has(k))];
+  function select(key) {
+    let shown = 0;
+    for (const li of feed.children) {
+      const on = !key || li.dataset.cat === key;
+      li.hidden = !on;
+      if (on) shown++;
+    }
+    for (const b of nav.children) b.setAttribute("aria-pressed", String(b.dataset.key === key));
+    document.getElementById("empty").hidden = shown > 0;
+  }
+  for (const [key, c] of entries) {
+    const b = document.createElement("button");
+    b.className = "chip";
+    b.dataset.key = key;
+    if (c.color) {
+      const dot = document.createElement("i");
+      dot.style.setProperty("--c", c.color);
+      b.append(dot);
+    }
+    b.append(c.label);
+    b.onclick = () => select(key);
+    nav.append(b);
+  }
+  select("");
+})();
+</script>
+</body>
+</html>

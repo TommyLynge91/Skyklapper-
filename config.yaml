@@ -1,0 +1,157 @@
+# Din feed. Ret her, push til GitHub, så bygges siden igen.
+
+title: Min feed
+max_age_days: 3        # ældre opslag skjules
+max_per_source: 25     # højst så mange opslag fra hver kilde
+
+# Kategorier bliver til filterknapper øverst på siden.
+categories:
+  musik:   { label: Musik,       color: "#7B5CD6" }
+  fodbold: { label: Fodbold,     color: "#C8102E" }
+  smil:    { label: Godt humør,  color: "#D99A00" }
+  fiskeri: { label: Fiskeri,     color: "#2E6FD1" }
+  traening: { label: Træning,    color: "#0F8B8D" }
+  friluft: { label: Friluftsliv, color: "#4E8A3E" }
+  underholdning: { label: Underholdning, color: "#C2408F" }
+
+sources:
+  # Nyhedssider: angiv forsiden, så finder scriptet selv RSS-feedet.
+  # Virker det ikke, så find feed-adressen og skriv den som  feed: https://...
+  - name: Soundvenue
+    site: https://soundvenue.com
+    category: musik
+  - name: Gaffa
+    site: https://gaffa.dk
+    category: musik
+
+  # Subreddits. sort kan være hot, new eller top.
+  - name: r/soccer
+    subreddit: soccer
+    category: fodbold
+  - name: r/LiverpoolFC
+    subreddit: LiverpoolFC
+    category: fodbold
+  - name: r/MadeMeSmile
+    subreddit: MadeMeSmile
+    category: smil
+
+  # YouTube-kanaler: brug kanalens @-navn fra adresselinjen.
+  # Navne og kategorier er gæt; ret dem frit.
+  - name: Det Næste Kast
+    youtube_handle: "@detnaestekastdk"
+    category: fiskeri
+  - name: Just Fishing
+    youtube_handle: "@JustfishingDK"
+    category: fiskeri
+  - name: Fisk med Søren
+    youtube_handle: "@fisk_med_soren"
+    category: fiskeri
+  - name: Flex Fishing
+    youtube_handle: "@flexfishing7063"
+    category: fiskeri
+  - name: Team Nordic Anglers
+    youtube_handle: "@Team-Nordicanglers"
+    category: fiskeri
+  - name: Rolf Nylinder
+    youtube_handle: "@RolfNylinder"
+    category: fiskeri
+  - name: Lukic Fishing
+    youtube_handle: "@lukicfishing"
+    category: fiskeri
+  - name: Frank Fisker
+    youtube_handle: "@Frankfisker"
+    category: fiskeri
+  - name: Danmarks Sportsfiskerforbund
+    youtube_handle: "@DanmarksSportsfiskerforbund"
+    category: fiskeri
+  - name: Gordon P. Henriksen
+    youtube_handle: "@gordonp.henriksen"
+    category: fiskeri
+  - name: Jeff Nippard
+    youtube_handle: "@JeffNippard"
+    category: traening
+  - name: Mike Thurston
+    youtube_handle: "@MikeThurston"
+    category: traening
+  - name: Eric Janicki
+    youtube_handle: "@ericjanickifitness"
+    category: traening
+  - name: Coach Eugene Teo
+    youtube_handle: "@coacheugeneteo"
+    category: traening
+  - name: Will Tennyson
+    youtube_handle: "@WillTennyson"
+    category: traening
+  - name: Dr. Pak
+    youtube_handle: "@Dr__Pak"
+    category: traening
+  - name: FriluftTV
+    youtube_handle: "@FriluftTV"
+    category: friluft
+  - name: Naturnørd
+    youtube_handle: "@naturnrd2607"
+    category: friluft
+  - name: Mats Schrøter
+    youtube_handle: "@Matsschroeter"
+    category: friluft
+  - name: Kasper i Naturen
+    youtube_handle: "@KasperiNaturen"
+    category: friluft
+  - name: Casey Neistat
+    youtube_handle: "@casey"
+    category: underholdning
+  - name: Sundae Conversation
+    youtube_handle: "@sundaeconversation"
+    category: underholdning
+  - name: Joe Fazer
+    youtube_handle: "@JoeFazer"
+    category: underholdning
+  - name: Rasmus Brohave
+    youtube_handle: "@RasmusBrohave"
+    category: underholdning
+  - name: Simon Jul
+    youtube_handle: "@simonjultube"
+    category: underholdning
+  - name: Vahanen Tom Funke
+    youtube_handle: "@VahanenTomFunke"
+    category: underholdning
+  - name: Box Office One
+    youtube_handle: "@BoxofficeOneMedia"
+    category: underholdning
+
+# Opslag hvor titel eller tekst indeholder disse ord, bliver skjult.
+# Store/små bogstaver er ligegyldige. Et * til sidst fanger også bøjninger:
+# "dræb*" rammer dræbt, dræber, dræbte. Uden * skal hele ordet passe.
+block_words:
+  - krig*
+  - war
+  - wars
+  - dræb*
+  - drab*
+  - killed
+  - killing
+  - murder*
+  - mord*
+  - død
+  - døde
+  - dødsfald
+  - dead
+  - death
+  - dies
+  - died
+  - terror*
+  - skyderi*
+  - gunman
+  - voldtægt*
+  - rape*
+  - overgreb*
+  - abuse*
+  - racis*
+  - selvmord*
+  - suicide
+  - kræft*
+  - cancer
+  - ulykke*
+  - crash*
+  - krise*
+  - crisis
