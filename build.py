@@ -210,11 +210,16 @@ def fetch_smartweb(src, cfg, blocker, cutoff):
             blocked += 1
             continue
         images = p.get("Images") or []
+        small = ((base + images[0]) if images and images[0].startswith("/") else (images[0] if images else None))
+        # Butikken sender små miniaturer (293 px). Vi beder om en større udgave
+        # og falder tilbage til miniaturen, hvis den ikke findes.
+        big = re.sub(r"\.w\d+\.h\d+\.", ".w640.h640.", small) if small else None
         items.append({
+            "image_fallback": small if big != small else None,
             "title": title,
             "summary": summary,
             "link": base + p["Handle"] if p.get("Handle") else base,
-            "image": (base + images[0]) if images and images[0].startswith("/") else (images[0] if images else None),
+            "image": big,
             "source": src["name"],
             "category": src.get("category", ""),
             "ts": int(ts),
